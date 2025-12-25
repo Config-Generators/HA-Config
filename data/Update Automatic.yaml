@@ -20,11 +20,16 @@ blueprint:
           mode: slider
     supervisor_patch_level:
       name: "Supervisor Patch-Level"
-      description: "Installiere Supervisor erst ab dieser Patch-Version (z.B. 3 für .3)"
+      description: |
+        Ab welcher Version soll der Supervisor installiert werden?
+        1 = Release
+        2 = Stabil
+        3 = Empfohlen / Sicher
+        4 = Final
       default: 3
       selector:
         number:
-          min: 1
+          min: 0
           max: 4
           mode: slider
     core_patch_level:
