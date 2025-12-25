@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HA Repository Cloud</title>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    
+    <!-- Babel für JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            750: '#2d3748',
+                            850: '#1a202c',
+                            950: '#0d1117',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Material Design Icons (MDI) -->
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7); /* Slate 800 with opacity */
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        /* Custom Scrollbar Dark */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 5px;
+            border: 2px solid #0f172a;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // KONFIGURATION - BITTE HIER IHRE DATEN EINTRAGEN
+        // =================================================
+        const GITHUB_USERNAME = "home-assistant"; // Z.B. Ihr Username
+        const GITHUB_REPO = "core"; // Z.B. "ha-blueprints"
+        const DEFAULT_BRANCH = "dev"; // Meistens "main" oder "master"
+        // =================================================
+
+        const { useState, useEffect } = React;
+
+        // Hilfsfunktion zum Parsen des Dateinamens
+        const parseFileInfo = (filename) => {
+            const parts = filename.split('.');
+            let iconClass = "mdi-file-outline";
+            let isCustomIcon = false;
+            
+            const mdiIndex = parts.findIndex(part => part.startsWith('mdi-'));
+
+            if (mdiIndex !== -1) {
+                iconClass = parts[mdiIndex];
+                parts.splice(mdiIndex, 1);
+                isCustomIcon = true;
+            } else {
+                const ext = parts[parts.length - 1].toLowerCase();
+                if (['yaml', 'yml'].includes(ext)) iconClass = "mdi-code-braces";
+                else if (['json', 'js'].includes(ext)) iconClass = "mdi-code-json";
+                else if (['md', 'txt'].includes(ext)) iconClass = "mdi-file-document-outline";
+                else if (['png', 'jpg', 'jpeg'].includes(ext)) iconClass = "mdi-image";
+            }
+
+            return {
+                cleanName: parts.join('.'),
+                iconClass: iconClass,
+                originalName: filename
+            };
+        };
+
+        const App = () => {
+            const [path, setPath] = useState("");
+            const [content, setContent] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [history, setHistory] = useState([]);
+
+            const fetchRepoContent = async (currentPath) => {
+                setLoading(true);
+                setError(null);
+                try {
+                    const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${currentPath}`;
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        if (response.status === 404) throw new Error("Ordner nicht gefunden oder Repository privat.");
+                        if (response.status === 403) throw new Error("GitHub API Limit erreicht.");
+                        throw new Error("Fehler beim Laden.");
+                    }
+
+                    const data = await response.json();
+                    
+                    const sortedData = Array.isArray(data) ? data.sort((a, b) => {
+                        if (a.type === b.type) return a.name.localeCompare(b.name);
+                        return a.type === "dir" ? -1 : 1;
+                    }) : [];
+
+                    setContent(sortedData);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                fetchRepoContent(path);
+            }, [path]);
+
+            const handleNavigate = (folderName) => {
+                setHistory([...history, path]);
+                setPath(path ? `${path}/${folderName}` : folderName);
+            };
+
+            const handleGoBack = () => {
+                if (history.length === 0) return;
+                const prevPath = history[history.length - 1];
+                setHistory(history.slice(0, -1));
+                setPath(prevPath);
+            };
+
+            const handleHome = () => {
+                setHistory([]);
+                setPath("");
+            };
+
+            const downloadFile = async (fileUrl, cleanName) => {
+                try {
+                    const response = await fetch(fileUrl);
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = cleanName;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } catch (e) {
+                    alert("Fehler: " + e.message);
+                }
+            };
+
+            const getRawUrl = (filePath) => {
+                return `https://raw.githubusercontent.com/${GITHUB_USERNAME}/${GITHUB_REPO}/${DEFAULT_BRANCH}/${filePath}`;
+            };
+
+            // Komponenten für die Listenansicht
+            const ListItem = ({ icon, title, subtitle, onClick, actions, isFolder }) => (
+                <div 
+                    onClick={onClick}
+                    className={`group flex items-center justify-between p-3 mb-2 rounded-lg border border-gray-800 bg-gray-800/50 hover:bg-gray-800 hover:border-gray-600 transition-all cursor-pointer ${isFolder ? 'hover:shadow-md hover:shadow-black/20' : ''}`}
+                >
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className={`p-2 rounded-lg ${isFolder ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-700/30 text-gray-400 group-hover:text-blue-400 group-hover:bg-blue-500/10'} transition-colors`}>
+                            <i className={`mdi ${icon} text-2xl`}></i>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                            <span className="font-medium text-gray-200 truncate pr-4">{title}</span>
+                            {subtitle && <span className="text-xs text-gray-500 truncate">{subtitle}</span>}
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 pl-4">
+                        {actions}
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen p-4 md:p-8">
+                    <div className="max-w-5xl mx-auto">
+                        
+                        {/* Header */}
+                        <header className="mb-6 flex items-center justify-between glass-panel p-6 rounded-2xl shadow-lg shadow-black/20">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-blue-600 p-3 rounded-xl text-white shadow-lg shadow-blue-900/50">
+                                    <i className="mdi mdi-home-assistant text-3xl"></i>
+                                </div>
+                                <div>
+                                    <h1 className="text-2xl font-bold text-gray-100">HA Cloud</h1>
+                                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                                        <i className="mdi mdi-source-repository"></i>
+                                        <span>{GITHUB_REPO}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <a 
+                                href={`https://github.com/${GITHUB_USERNAME}/${GITHUB_REPO}`}
+                                target="_blank"
+                                className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition border border-gray-700"
+                            >
+                                <i className="mdi mdi-github text-xl"></i>
+                                <span>GitHub</span>
+                            </a>
+                        </header>
+
+                        {/* Navigation Bar */}
+                        <nav className="flex items-center gap-2 mb-6 text-gray-400 bg-gray-800/40 p-2 rounded-xl border border-gray-800 backdrop-blur-sm">
+                            <button 
+                                onClick={handleHome}
+                                className="hover:bg-gray-700 hover:text-white p-2 rounded-lg transition"
+                                title="Root"
+                            >
+                                <i className="mdi mdi-home-outline text-xl"></i>
+                            </button>
+                            
+                            {path && (
+                                <>
+                                    <i className="mdi mdi-chevron-right text-gray-600"></i>
+                                    <button 
+                                        onClick={handleGoBack} 
+                                        className="hover:bg-gray-700 hover:text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1 text-sm font-medium"
+                                    >
+                                        <i className="mdi mdi-arrow-left text-xs"></i> Zurück
+                                    </button>
+                                    <i className="mdi mdi-chevron-right text-gray-600"></i>
+                                    <span className="font-medium text-blue-400 truncate max-w-[200px] px-2">
+                                        {path.split('/').pop()}
+                                    </span>
+                                </>
+                            )}
+                        </nav>
+
+                        {/* Content Area */}
+                        {loading ? (
+                            <div className="flex flex-col items-center justify-center py-32 text-gray-500">
+                                <i className="mdi mdi-loading mdi-spin text-5xl mb-4 text-blue-500"></i>
+                                <p>Synchronisiere...</p>
+                            </div>
+                        ) : error ? (
+                            <div className="bg-red-900/20 border border-red-900/50 text-red-200 p-6 rounded-xl text-center">
+                                <i className="mdi mdi-alert-circle-outline text-4xl mb-2 text-red-500 block"></i>
+                                <p className="font-bold">Zugriffsfehler</p>
+                                <p className="text-sm mt-1 opacity-80">{error}</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-1">
+                                {content.length === 0 && (
+                                    <div className="text-center py-20 text-gray-600 bg-gray-800/30 rounded-2xl border border-gray-800 border-dashed">
+                                        <i className="mdi mdi-folder-open-outline text-6xl mb-4 opacity-50"></i>
+                                        <p>Dieser Ordner ist leer.</p>
+                                    </div>
+                                )}
+
+                                {/* Ordner zuerst rendern */}
+                                {content.filter(i => i.type === "dir").map((item) => (
+                                    <ListItem 
+                                        key={item.sha}
+                                        icon="mdi-folder"
+                                        title={item.name}
+                                        isFolder={true}
+                                        onClick={() => handleNavigate(item.name)}
+                                        actions={
+                                            <i className="mdi mdi-chevron-right text-gray-600 text-xl"></i>
+                                        }
+                                    />
+                                ))}
+
+                                {/* Dateien rendern */}
+                                {content.filter(i => i.type !== "dir").map((item) => {
+                                    const { cleanName, iconClass } = parseFileInfo(item.name);
+                                    const rawUrl = getRawUrl(item.path);
+
+                                    return (
+                                        <ListItem 
+                                            key={item.sha}
+                                            icon={iconClass}
+                                            title={cleanName}
+                                            subtitle={item.name !== cleanName ? item.name : null} // Zeigt echten Namen als Untertitel, falls abweichend
+                                            isFolder={false}
+                                            onClick={(e) => {
+                                                // Optional: Klick auf Zeile könnte Vorschau öffnen
+                                            }}
+                                            actions={
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigator.clipboard.writeText(rawUrl);
+                                                            // Optional: Toast message here
+                                                        }}
+                                                        className="p-2 text-gray-500 hover:text-white hover:bg-gray-700 rounded-lg transition"
+                                                        title="Raw Link kopieren"
+                                                    >
+                                                        <i className="mdi mdi-link-variant"></i>
+                                                    </button>
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            downloadFile(item.download_url, cleanName);
+                                                        }}
+                                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition shadow-lg shadow-blue-900/20"
+                                                    >
+                                                        <i className="mdi mdi-download"></i> Laden
+                                                    </button>
+                                                </div>
+                                            }
+                                        />
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        <footer className="mt-12 text-center text-gray-600 text-xs border-t border-gray-800 pt-8">
+                            <p>Home Assistant Repository Cloud Browser</p>
+                        </footer>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
