@@ -11,7 +11,11 @@ blueprint:
         time: {}
     os_patch_level:
       name: "OS Patch-Level"
-      description: "Installiere HA OS erst ab dieser Patch-Version (z.B. 1 für .1)"
+      description: |
+        Ab welcher Version soll das OS installiert werden?
+        0 = Beta
+        1 = Empfohlen / Stable
+        2 = Final
       default: 1
       selector:
         number:
@@ -21,7 +25,8 @@ blueprint:
     supervisor_patch_level:
       name: "Supervisor Patch-Level"
       description: |
-        Ab welcher Version soll der Supervisor installiert werden?
+        Ab welcher Version soll der HA Supervisor installiert werden?
+        0 = Beta
         1 = Release
         2 = Stabil
         3 = Empfohlen / Sicher
@@ -34,11 +39,17 @@ blueprint:
           mode: slider
     core_patch_level:
       name: "Core Patch-Level"
-      description: "Installiere Core erst ab dieser Patch-Version (z.B. 3 für .3)"
+      description: |
+        Ab welcher Version soll der HA Core installiert werden?
+        0 = Beta
+        1 = Release
+        2 = Stabil
+        3 = Empfohlen / Sicher
+        4 = Final
       default: 3
       selector:
         number:
-          min: 1
+          min: 0
           max: 4
           mode: slider
 
