@@ -52,12 +52,20 @@ blueprint:
           min: 0
           max: 4
           mode: slider
-
+    auto_update_entities:
+      name: "Sofort-Update Add-ons"
+      description: "Wähle hier die Add-ons aus, die immer sofort (ohne Patch-Prüfung) aktualisiert werden sollen (z.B. File Editor, MQTT Explorer)."
+      default: []
+      selector:
+        target:
+          entity:
+            domain: update
 variables:
   # Übertragen der Inputs in Variablen für die Nutzung in Templates
   os_limit: !input os_patch_level
   sup_limit: !input supervisor_patch_level
   core_limit: !input core_patch_level
+  auto_entities: !input auto_update_entities
 
 mode: single
 
@@ -104,6 +112,8 @@ action:
           - action: update.install
             target:
               entity_id: update.home_assistant_supervisor_update
+            data:
+              backup: true
 
       # 3. Home Assistant Core
       - conditions:
@@ -127,9 +137,6 @@ action:
 
     default:
       - action: update.install
-        target:
-          entity_id:
-            - update.file_editor_update
-            - update.mqtt_explorer_update
+        target: !input auto_update_entities
         data:
           backup: true
