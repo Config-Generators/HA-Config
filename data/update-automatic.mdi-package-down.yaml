@@ -1,0 +1,142 @@
+blueprint:
+  name: "Automatisches Update Management (Konfigurierbar)"
+  description: "Installiert Updates basierend auf einstellbaren Patch-Level-Schwellenwerten."
+  domain: automation
+  input:
+    update_time:
+      name: "Update Uhrzeit"
+      description: "Wann soll die Prüfung durchgeführt werden?"
+      default: "00:00:00"
+      selector:
+        time: {}
+    os_patch_level:
+      name: "OS Patch-Level"
+      description: |
+        Ab welcher Version soll das OS installiert werden?
+        0 = Beta
+        1 = Empfohlen / Stable
+        2 = Final
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 2
+          mode: slider
+    supervisor_patch_level:
+      name: "Supervisor Patch-Level"
+      description: |
+        Ab welcher Version soll der HA Supervisor installiert werden?
+        0 = Beta
+        1 = Release
+        2 = Stabil
+        3 = Empfohlen / Sicher
+        4 = Final
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: slider
+    core_patch_level:
+      name: "Core Patch-Level"
+      description: |
+        Ab welcher Version soll der HA Core installiert werden?
+        0 = Beta
+        1 = Release
+        2 = Stabil
+        3 = Empfohlen / Sicher
+        4 = Final
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: slider
+    auto_update_entities:
+      name: "Sofort-Update Add-ons"
+      description: "Wähle hier die Add-ons aus, die immer sofort (ohne Patch-Prüfung) aktualisiert werden sollen (z.B. File Editor, MQTT Explorer)."
+      default: []
+      selector:
+        target:
+          entity:
+            domain: update
+variables:
+  # Übertragen der Inputs in Variablen für die Nutzung in Templates
+  os_limit: !input os_patch_level
+  sup_limit: !input supervisor_patch_level
+  core_limit: !input core_patch_level
+  auto_entities: !input auto_update_entities
+
+mode: single
+
+trigger:
+  - trigger: time
+    at: !input update_time
+
+action:
+  - choose:
+      # 1. Home Assistant Operating System
+      - conditions:
+          - condition: template
+            value_template: >
+              {% set entity = 'update.home_assistant_operating_system_update' %}
+              {% set current = state_attr(entity, 'installed_version') %}
+              {% set latest = state_attr(entity, 'latest_version') %}
+              {% if latest and current and latest != current %}
+                {% set patch = latest.split('.')[-1] | int %}
+                {{ latest > current and patch >= os_limit }}
+              {% else %}
+                false
+              {% endif %}
+        sequence:
+          - action: update.install
+            target:
+              entity_id: update.home_assistant_operating_system_update
+            data:
+              backup: true
+
+      # 2. Home Assistant Supervisor
+      - conditions:
+          - condition: template
+            value_template: >
+              {% set entity = 'update.home_assistant_supervisor_update' %}
+              {% set current = state_attr(entity, 'installed_version') %}
+              {% set latest = state_attr(entity, 'latest_version') %}
+              {% if latest and current and latest != current %}
+                {% set patch = latest.split('.')[-1] | int %}
+                {{ latest > current and patch >= sup_limit }}
+              {% else %}
+                false
+              {% endif %}
+        sequence:
+          - action: update.install
+            target:
+              entity_id: update.home_assistant_supervisor_update
+            data:
+              backup: true
+
+      # 3. Home Assistant Core
+      - conditions:
+          - condition: template
+            value_template: >
+              {% set entity = 'update.home_assistant_core_update' %}
+              {% set current = state_attr(entity, 'installed_version') %}
+              {% set latest = state_attr(entity, 'latest_version') %}
+              {% if latest and current and latest != current %}
+                {% set patch = latest.split('.')[-1] | int %}
+                {{ latest > current and patch >= core_limit }}
+              {% else %}
+                false
+              {% endif %}
+        sequence:
+          - action: update.install
+            target:
+              entity_id: update.home_assistant_core_update
+            data:
+              backup: true
+
+    default:
+      - action: update.install
+        target: !input auto_update_entities
+        data:
+          backup: true
