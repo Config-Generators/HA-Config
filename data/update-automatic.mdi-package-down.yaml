@@ -1,5 +1,5 @@
 blueprint:
-  name: "Automatisches Update Management (Konfigurierbar)"
+  name: "Update Automatic Management"
   description: "Installiert Updates basierend auf einstellbaren Patch-Level-Schwellenwerten."
   domain: automation
   input:
